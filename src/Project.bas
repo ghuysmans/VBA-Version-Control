@@ -22,6 +22,19 @@ Attribute VB_Name = "Project"
 ''
 Option Explicit
 
+Private Type StoredReference
+    Guid As String
+    Major As Integer
+    Minor As Integer
+    FullPath As String
+    Description As String
+End Type
+
+Private Const UNTOUCHED_COMPONENTS As String = _
+    "{00020430-0000-0000-C000-000000000046}    OLE Automation" & _
+    "{2DF8D04C-5BFA-101B-BDE5-00AA0044DE52}    Microsoft Office 16.0 Object Library" & _
+    "{0D452EE1-E08F-101A-852E-02608C4D0BB4}    Microsoft Forms 2.0 Object Library"
+
 ' Root Directory of this Project.
 Public Property Get Dirname() As String
     Dirname = ThisWorkbook.path
@@ -98,13 +111,13 @@ Private Function getVBComponentFilename(ByRef component As VBComponent) As Strin
 End Function
 
 ' Check to see if component exits in this current Project
-Private Function componentExists(ByVal filename As String) As Boolean
+Private Function componentExists(ByVal FileName As String) As Boolean
     Dim index As Long
     For index = 1 To thisProjectsVBComponents.count
         Dim component As VBComponent
         Set component = thisProjectsVBComponents(index)
         
-        If getVBComponentFilename(component) = filename Then
+        If getVBComponentFilename(component) = FileName Then
             componentExists = True
             Exit Function
         End If
@@ -245,3 +258,61 @@ Private Function joinPaths(ParamArray paths() As Variant) As String
         joinPaths = fso.BuildPath(joinPaths, Replace(paths(index), "/", "\"))
     Next
 End Function
+
+Private Sub exportReferences(Workbook As Workbook, FileName As String)
+    Dim r As Reference
+    Dim f As Integer
+    f = FreeFile
+    Open FileName For Output As #f
+    For Each r In Workbook.VBProject.References
+        If Not r.BuiltIn And InStr(UNTOUCHED_COMPONENTS, r.Guid) = 0 Then
+            'Debug.Print r.Guid, r.Description
+            Write #f, r.Guid, r.Major, r.Minor, r.FullPath, r.Description
+        End If
+    Next r
+    Close #f
+    'Shell "notepad.exe " & FileName, vbNormalFocus 'FIXME
+End Sub
+
+Private Property Get referenceFile() As String
+    referenceFile = joinPaths(SourceDirectory, "References.lst")
+End Property
+
+Public Sub ExportReferencesToSourceFolder()
+    exportReferences ThisWorkbook, referenceFile
+End Sub
+
+Private Sub importReferences(Workbook As Workbook, FileName As String)
+    Dim f As Integer
+    f = FreeFile
+    Dim a() As StoredReference
+    ReDim a(7)
+    Dim i As Integer
+    Open FileName For Input Shared As #f
+    While Not EOF(f)
+        Input #f, a(i).Guid, a(i).Major, a(i).Minor, a(i).FullPath, a(i).Description
+        i = i + 1
+        If i > UBound(a) Then ReDim Preserve a(2 * i - 1)
+    Wend
+    Close #f
+    'TODO sync?
+    Dim refs As References
+    Set refs = Workbook.VBProject.References
+    Dim r As Reference
+    For Each r In refs
+        If Not r.BuiltIn And InStr(Untouched, r.Guid) = 0 Then _
+            refs.Remove r
+    Next r
+    While i > 0
+        i = i - 1
+        refs.AddFromGuid a(i).Guid, a(i).Major, a(i).Minor
+        'FIXME use FullPath?
+    Wend
+End Sub
+
+Public Sub DangerouslyImportReferencesFromSourceFolder()
+    If MsgBox("Are you sure you want to import from source folder? There is no going back!!!", vbYesNo) = vbNo Then
+        Exit Sub
+    End If
+    importReferences ThisWorkbook, referenceFile
+End Sub
