@@ -16,4 +16,3 @@ Option Explicit
 Private Function add(ByVal a As Double, ByVal b As Double) As Double
     add = a + b
 End Function
-
