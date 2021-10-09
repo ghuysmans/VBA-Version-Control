@@ -37,7 +37,7 @@ Private Const UNTOUCHED_COMPONENTS As String = _
 
 ' Root Directory of this Project.
 Public Property Get Dirname() As String
-    Dirname = ThisWorkbook.path
+    Dirname = ActiveWorkbook.path
 End Property
 
 ' Directory where all source code will be stored. `./src`
@@ -50,7 +50,7 @@ End Property
 '        for any project/workbook? For now will leave as the
 '        current
 Private Property Get thisProjectsVBComponents() As VBComponents
-    Set thisProjectsVBComponents = ThisWorkbook.VBProject.VBComponents
+    Set thisProjectsVBComponents = ActiveWorkbook.VBProject.VBComponents
 End Property
 
 ' Helper function to run scripts from the root directory.
@@ -60,7 +60,7 @@ Public Function Bash(script As String, Optional keepCommandWindowOpen As Boolean
     ' /C      Carries out the command specified by string and then terminates
     ' /K      Carries out the command specified by string but remains
     ' cd      Change directory to the root directory.
-    Bash = Shell("cmd.exe /S /" & IIf(keepCommandWindowOpen, "K", "C") & " cd " & ThisWorkbook.path & " && " & script)
+    Bash = Shell("cmd.exe /S /" & IIf(keepCommandWindowOpen, "K", "C") & " cd " & ActiveWorkbook.path & " && " & script)
 End Function
 
 ' Initiates a new Git Project in the current folder.
@@ -279,7 +279,7 @@ Private Property Get referenceFile() As String
 End Property
 
 Public Sub ExportReferencesToSourceFolder()
-    exportReferences ThisWorkbook, referenceFile
+    exportReferences ActiveWorkbook, referenceFile
 End Sub
 
 Private Sub importReferences(Workbook As Workbook, FileName As String)
@@ -314,5 +314,5 @@ Public Sub DangerouslyImportReferencesFromSourceFolder()
     If MsgBox("Are you sure you want to import from source folder? There is no going back!!!", vbYesNo) = vbNo Then
         Exit Sub
     End If
-    importReferences ThisWorkbook, referenceFile
+    importReferences ActiveWorkbook, referenceFile
 End Sub
