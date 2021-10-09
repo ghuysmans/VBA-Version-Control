@@ -35,14 +35,11 @@ Private Const UNTOUCHED_COMPONENTS As String = _
     "{2DF8D04C-5BFA-101B-BDE5-00AA0044DE52}    Microsoft Office 16.0 Object Library" & _
     "{0D452EE1-E08F-101A-852E-02608C4D0BB4}    Microsoft Forms 2.0 Object Library"
 
-' Root Directory of this Project.
-Public Property Get Dirname() As String
-    Dirname = ActiveWorkbook.path
-End Property
+Public Doc As Object
 
 ' Directory where all source code will be stored. `./src`
 Public Property Get SourceDirectory() As String
-    SourceDirectory = joinPaths(Dirname, "src")
+    SourceDirectory = joinPaths(Doc.path, "src")
 End Property
 
 ' Helper function to run scripts from the root directory.
@@ -52,7 +49,7 @@ Public Function Bash(script As String, Optional keepCommandWindowOpen As Boolean
     ' /C      Carries out the command specified by string and then terminates
     ' /K      Carries out the command specified by string but remains
     ' cd      Change directory to the root directory.
-    Bash = Shell("cmd.exe /S /" & IIf(keepCommandWindowOpen, "K", "C") & " cd " & ActiveWorkbook.path & " && " & script)
+    Bash = Shell("cmd.exe /S /" & IIf(keepCommandWindowOpen, "K", "C") & " cd " & Doc.path & " && " & script)
 End Function
 
 ' Initiates a new Git Project in the current folder.
@@ -62,7 +59,7 @@ Public Sub InitializeProject()
     ' Create a default .gitignore file if it doesn't exist already
     ' @see https://git-scm.com/docs/gitignore
     Dim gitignorePath As String
-    gitignorePath = joinPaths(Dirname, ".gitignore")
+    gitignorePath = joinPaths(Doc.path, ".gitignore")
     If Not fso.FileExists(gitignorePath) Then
         With fso.OpenTextFile(gitignorePath, ForWriting, True)
             .WriteLine ("# Packages")
@@ -79,7 +76,7 @@ Public Sub InitializeProject()
     Bash script:="git init", keepCommandWindowOpen:=False
 
     On Error Resume Next 'make this idempotent
-    ActiveWorkbook.CustomDocumentProperties.add _
+    Doc.CustomDocumentProperties.add _
         Name:="vba-git", _
         LinkToContent:=False, _
         Type:=msoPropertyTypeBoolean, _
@@ -112,9 +109,9 @@ End Function
 ' Check to see if component exits in this current Project
 Private Function componentExists(ByVal FileName As String) As Boolean
     Dim index As Long
-    For index = 1 To thisProjectsVBComponents.count
+    For index = 1 To Doc.VBProject.VBComponents.count
         Dim component As VBComponent
-        Set component = thisProjectsVBComponents(index)
+        Set component = Doc.VBProject.VBComponents(index)
         
         If getVBComponentFilename(component) = FileName Then
             componentExists = True
@@ -123,32 +120,28 @@ Private Function componentExists(ByVal FileName As String) As Boolean
     Next index
 End Function
 
-Public Sub ExportComponents(Wb As Workbook, Destination As String)
+' Export all modules in this current workbook into a src dir
+Public Sub ExportComponentsToSourceFolder()
     ' Make sure the source directory exists before adding to it.
     Dim fso As New Scripting.FileSystemObject
-    If Not fso.FolderExists(Destination) Then
-        fso.CreateFolder Destination
+    If Not fso.FolderExists(SourceDirectory) Then
+        fso.CreateFolder SourceDirectory
     Else
         Dim file As file
-        For Each file In fso.GetFolder(Destination).Files
+        For Each file In fso.GetFolder(SourceDirectory).Files
             file.Delete
         Next file
     End If
     
     ' Loop each component within this project and export to source directory.
     Dim index As Long
-    For index = 1 To Wb.VBProject.VBComponents.count
+    For index = 1 To Doc.VBProject.VBComponents.count
         Dim component As VBComponent
-        Set component = Wb.VBProject.VBComponents(index)
+        Set component = Doc.VBProject.VBComponents(index)
         
         ' Export component to the source directory using the components name and file extension.
-        component.Export joinPaths(Destination, getVBComponentFilename(component))
+        component.Export joinPaths(SourceDirectory, getVBComponentFilename(component))
     Next index
-End Sub
-
-' Export all modules in this current workbook into a src dir
-Public Sub ExportComponentsToSourceFolder()
-    ExportComponents ActiveWorkbook, SourceDirectory
 End Sub
 
 ' Import source code from the source Directory.
@@ -172,13 +165,13 @@ Public Sub DangerouslyImportComponentsFromSourceFolder()
         ' import the file, otherwise an error is thrown.
         If componentExists(file.Name) And file.Name <> "Project.bas" Then
             Dim component As VBComponent
-            Set component = thisProjectsVBComponents.Item(fso.GetBaseName(file.Name))
+            Set component = Doc.VBProject.VBComponents.Item(fso.GetBaseName(file.Name))
             
             ' Unable to remove document type components (Sheets, workbook)
             If component.Type <> vbext_ct_Document Then
                 ' This removes the component but doesn't from memory until
                 ' after all code execution has completed.
-                thisProjectsVBComponents.Remove component
+                Doc.VBProject.VBComponents.Remove component
             End If
         End If
     Next file
@@ -195,7 +188,7 @@ Private Sub saftleyImportAfterCleanup()
     For Each file In fso.GetFolder(SourceDirectory).Files
         If Not componentExists(file.Name) And fso.GetExtensionName(file.Name) <> "frx" Then
             ' Safe to import the source file as there are no conflicts of names.
-            thisProjectsVBComponents.Import joinPaths(SourceDirectory, file.Name)
+            Doc.VBProject.VBComponents.Import joinPaths(SourceDirectory, file.Name)
         End If
     Next file
 End Sub
@@ -233,9 +226,9 @@ End Function
 ' @status Production
 Public Property Get ComponentsDetails() As String
     Dim index As Long
-    For index = 1 To thisProjectsVBComponents.count
+    For index = 1 To Doc.VBProject.VBComponents.count
         Dim component As VBComponent
-        Set component = thisProjectsVBComponents(index)
+        Set component = Doc.VBProject.VBComponents(index)
         
         ComponentsDetails = ComponentsDetails & getComponentDetails(component) & vbNewLine
     Next index
@@ -245,9 +238,9 @@ End Property
 ' @status Development
 Private Sub printDiffFromSourceFolder()
     Dim index As Long
-    For index = 1 To thisProjectsVBComponents.count
+    For index = 1 To Doc.VBProject.VBComponents.count
         Dim component As VBComponent
-        Set component = thisProjectsVBComponents(index)
+        Set component = Doc.VBProject.VBComponents(index)
         
         Debug.Print getVBComponentFilename(component)
     Next index
@@ -262,12 +255,16 @@ Private Function joinPaths(ParamArray paths() As Variant) As String
     Next
 End Function
 
-Private Sub exportReferences(Workbook As Workbook, FileName As String)
+Private Property Get referenceFile() As String
+    referenceFile = joinPaths(SourceDirectory, "References.lst")
+End Property
+
+Private Sub ExportReferencesToSourceFolder()
     Dim r As Reference
     Dim f As Integer
     f = FreeFile
-    Open FileName For Output As #f
-    For Each r In Workbook.VBProject.References
+    Open referenceFile For Output As #f
+    For Each r In Doc.VBProject.References
         If Not r.BuiltIn And InStr(UNTOUCHED_COMPONENTS, r.Guid) = 0 Then
             'Debug.Print r.Guid, r.Description
             Write #f, r.Guid, r.Major, r.Minor, r.FullPath, r.Description
@@ -277,21 +274,17 @@ Private Sub exportReferences(Workbook As Workbook, FileName As String)
     'Shell "notepad.exe " & FileName, vbNormalFocus 'FIXME
 End Sub
 
-Private Property Get referenceFile() As String
-    referenceFile = joinPaths(SourceDirectory, "References.lst")
-End Property
+Private Sub DangerouslyImportReferencesFromSourceFolder()
+    If MsgBox("Are you sure you want to import from source folder? There is no going back!!!", vbYesNo) = vbNo Then
+        Exit Sub
+    End If
 
-Public Sub ExportReferencesToSourceFolder()
-    exportReferences ActiveWorkbook, referenceFile
-End Sub
-
-Private Sub importReferences(Workbook As Workbook, FileName As String)
     Dim f As Integer
     f = FreeFile
     Dim a() As StoredReference
     ReDim a(7)
     Dim i As Integer
-    Open FileName For Input Shared As #f
+    Open referenceFile For Input Shared As #f
     While Not EOF(f)
         Input #f, a(i).Guid, a(i).Major, a(i).Minor, a(i).FullPath, a(i).Description
         i = i + 1
@@ -300,7 +293,7 @@ Private Sub importReferences(Workbook As Workbook, FileName As String)
     Close #f
     'TODO sync?
     Dim refs As References
-    Set refs = Workbook.VBProject.References
+    Set refs = Doc.VBProject.References
     Dim r As Reference
     For Each r In refs
         If Not r.BuiltIn And InStr(Untouched, r.Guid) = 0 Then _
@@ -311,11 +304,4 @@ Private Sub importReferences(Workbook As Workbook, FileName As String)
         refs.AddFromGuid a(i).Guid, a(i).Major, a(i).Minor
         'FIXME use FullPath?
     Wend
-End Sub
-
-Public Sub DangerouslyImportReferencesFromSourceFolder()
-    If MsgBox("Are you sure you want to import from source folder? There is no going back!!!", vbYesNo) = vbNo Then
-        Exit Sub
-    End If
-    importReferences ActiveWorkbook, referenceFile
 End Sub

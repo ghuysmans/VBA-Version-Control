@@ -27,7 +27,7 @@ End Sub
 
 
 Private Sub app_WorkbookAfterSave(ByVal Wb As Workbook, ByVal Success As Boolean)
-    'FIXME use Wb?
+    Set Project.Doc = Wb
     Dim Property As DocumentProperty
     On Error Resume Next
     Set Property = ActiveWorkbook.CustomDocumentProperties("vba-git")
