@@ -45,14 +45,6 @@ Public Property Get SourceDirectory() As String
     SourceDirectory = joinPaths(Dirname, "src")
 End Property
 
-' This Projects VB thisProjectsVBComponents.
-' @NOTE: Should this be a single project, or should I use this
-'        for any project/workbook? For now will leave as the
-'        current
-Private Property Get thisProjectsVBComponents() As VBComponents
-    Set thisProjectsVBComponents = ActiveWorkbook.VBProject.VBComponents
-End Property
-
 ' Helper function to run scripts from the root directory.
 Public Function Bash(script As String, Optional keepCommandWindowOpen As Boolean = False) As Double
     ' cmd.exe Opens the command prompt.
@@ -131,28 +123,32 @@ Private Function componentExists(ByVal FileName As String) As Boolean
     Next index
 End Function
 
-' Export all modules in this current workbook into a src dir
-Public Sub ExportComponentsToSourceFolder()
+Public Sub ExportComponents(Wb As Workbook, Destination As String)
     ' Make sure the source directory exists before adding to it.
     Dim fso As New Scripting.FileSystemObject
-    If Not fso.FolderExists(SourceDirectory) Then
-        fso.CreateFolder SourceDirectory
+    If Not fso.FolderExists(Destination) Then
+        fso.CreateFolder Destination
     Else
         Dim file As file
-        For Each file In fso.GetFolder(SourceDirectory).Files
+        For Each file In fso.GetFolder(Destination).Files
             file.Delete
         Next file
     End If
     
     ' Loop each component within this project and export to source directory.
     Dim index As Long
-    For index = 1 To thisProjectsVBComponents.count
+    For index = 1 To Wb.VBProject.VBComponents.count
         Dim component As VBComponent
-        Set component = thisProjectsVBComponents(index)
+        Set component = Wb.VBProject.VBComponents(index)
         
         ' Export component to the source directory using the components name and file extension.
-        component.Export joinPaths(SourceDirectory, getVBComponentFilename(component))
+        component.Export joinPaths(Destination, getVBComponentFilename(component))
     Next index
+End Sub
+
+' Export all modules in this current workbook into a src dir
+Public Sub ExportComponentsToSourceFolder()
+    ExportComponents ActiveWorkbook, SourceDirectory
 End Sub
 
 ' Import source code from the source Directory.
