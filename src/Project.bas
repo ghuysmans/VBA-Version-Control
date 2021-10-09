@@ -82,9 +82,16 @@ Public Sub InitializeProject()
         End With
     End If
     
-    ' Initialie git (safe even if it already exists)
+    ' Initialize git (safe even if it already exists)
     ' @see https://git-scm.com/docs/git-init
     Bash script:="git init", keepCommandWindowOpen:=False
+
+    On Error Resume Next 'make this idempotent
+    ActiveWorkbook.CustomDocumentProperties.add _
+        Name:="vba-git", _
+        LinkToContent:=False, _
+        Type:=msoPropertyTypeBoolean, _
+        Value:=True
 End Sub
 
 ' Get the file extension for a VBComponent. That is the component name and the proper extension.
